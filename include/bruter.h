@@ -14,6 +14,7 @@
 #include <emscripten.h>
 #endif
 
+
 #define VERSION "0.7.5b"
 
 #define TYPE_ANY 0
@@ -23,6 +24,8 @@
 #define TYPE_BUILTIN 4
 #define TYPE_FUNCTION 7
 
+// we use Int and Float instead of int and float because we need to use always the pointer size for any type that might share the fundamental union type;
+// bruter use a union as universal type, and bruter is able to manipulate and use pointers direcly so we need to use the pointer size;
 #if __SIZEOF_POINTER__ == 8
     #define Int long
     #define Float double
@@ -31,122 +34,12 @@
     #define Float float
 #endif
 
+// c_list.h must be included after defining Int, because it also relies on it and will define it as a int(4byte) if it's not defined, instead of the pointer size(which might usually be 8 bytes);
+#include "c_list.h"
+
 #ifndef NULL
 #define NULL 0
 #endif
-
-
-//stack implementation
-#define Stack(T) struct \
-{ \
-    T *data; \
-    Int size; \
-    Int capacity; \
-}
-
-#define stack_init(s) do \
-{ \
-    (s).data = NULL; \
-    (s).size = 0; \
-    (s).capacity = 0;\
-} while (0)
-
-// increase the capacity of the stack
-#define stack_double(s) do { \
-    (s).capacity = (s).capacity == 0 ? 1 : (s).capacity * 2; \
-    (s).data = realloc((s).data, (s).capacity * sizeof(*(s).data)); \
-} while (0)
-
-// decrease the capacity of the stack
-#define stack_half(s) do { \
-    (s).capacity /= 2; \
-    (s).data = realloc((s).data, (s).capacity * sizeof(*(s).data)); \
-    if ((s).size > (s).capacity) { \
-        (s).size = (s).capacity; \
-    } \
-} while (0)
-
-#define stack_push(s, v) do { \
-    if ((s).size == (s).capacity) { \
-        stack_double(s); \
-    } \
-    (s).data[(s).size++] = (v); \
-} while (0)
-
-#define stack_unshift(s, v) do { \
-    if ((s).size == (s).capacity) { \
-        stack_double(s); \
-    } \
-    for (Int i = (s).size; i > 0; i--) { \
-        (s).data[i] = (s).data[i - 1]; \
-    } \
-    (s).data[0] = (v); \
-    (s).size++; \
-} while (0)
-
-#define stack_pop(s) ((s).data[--(s).size])
-
-#define stack_shift(s) ({ \
-    typeof((s).data[0]) ret = (s).data[0]; \
-    for (Int i = 0; i < (s).size - 1; i++) { \
-        (s).data[i] = (s).data[i + 1]; \
-    } \
-    (s).size--; \
-    ret; \
-})
-
-#define stack_free(s) ({free((s).data);free(&s);})
-
-//swap elements from index i1 to index i2
-#define stack_swap(s, i1, i2) do { \
-    typeof((s).data[i1]) tmp = (s).data[i1]; \
-    (s).data[i1] = (s).data[i2]; \
-    (s).data[i2] = tmp; \
-} while (0)
-
-//insert element v at index i
-#define stack_insert(s, i, v) do { \
-    if ((s).size == (s).capacity) { \
-        stack_double(s); \
-    } \
-    for (Int j = (s).size; j > i; j--) { \
-        (s).data[j] = (s).data[j - 1]; \
-    } \
-    (s).data[i] = (v); \
-    (s).size++; \
-} while (0)
-
-//remove element at index i and return it
-#define stack_remove(s, i) ({ \
-    typeof((s).data[i]) ret = (s).data[i]; \
-    for (Int j = i; j < (s).size - 1; j++) { \
-        (s).data[j] = (s).data[j + 1]; \
-    } \
-    (s).size--; \
-    ret; \
-})
-
-//same as remove but does a swap and pop, faster but the order of the elements will change
-#define stack_fast_remove(s, i) ({ \
-    typeof((s).data[i]) ret = (s).data[i]; \
-    stack_swap(s, i, (s).size - 1); \
-    stack_pop(s); \
-    ret; \
-})
-
-#define stack_find(s, v) ({ \
-    Int i = 0; \
-    while (i < (s).size && (s).data[i] != (v)) { \
-        i++; \
-    } \
-    i == (s).size ? -1 : i; \
-})
-
-#define stack_reverse(s) do { \
-    for (Int i = 0; i < (s).size / 2; i++) { \
-        stack_swap((s), i, (s).size - i - 1); \
-    } \
-} while (0)
 
 //Value
 typedef union 
@@ -166,11 +59,11 @@ typedef struct
 } Hash;
 
 //List
-typedef Stack(Value) ValueList;
-typedef Stack(Hash) HashList;
-typedef Stack(char*) StringList;
-typedef Stack(Int) IntList;
-typedef Stack(char) CharList;
+typedef List(Value) ValueList;
+typedef List(Hash) HashList;
+typedef List(char*) StringList;
+typedef List(Int) IntList;
+typedef List(char) CharList;
 
 
 typedef struct

@@ -16,8 +16,8 @@ enum
 const char* item_names[] = 
 {
     "hand",
-    "gun_revolver",
-    "buller_revolver"
+    "38tão enferrujado",
+    "revolver bullets"
 };
 
 const char* equip_image_paths[] = 
@@ -41,6 +41,11 @@ const int item_capacities[] =
     12
 };
 
+// CREATURE DEFINES
+#define CREATURE_IDLE 0
+#define CREATURE_RELOAD 1
+#define CREATURE_SHOOT 2
+
 typedef struct 
 {
     Vector3 position;
@@ -49,7 +54,7 @@ typedef struct
     Int content_type;
     Int content;
 } Item;
-typedef Stack(Item) ItemList;
+typedef List(Item) ItemList;
 
 typedef struct 
 {
@@ -62,8 +67,9 @@ typedef struct
     Float speed;
     ItemList *inventory; 
     Int current_item;
+    Int status;
 } Creature;
-typedef Stack(Creature) CreatureList;
+typedef List(Creature) CreatureList;
 
 typedef struct 
 {
@@ -71,7 +77,7 @@ typedef struct
     Vector3 direction;
     Float speed;
 } Bullet;
-typedef Stack(Bullet) BulletList;
+typedef List(Bullet) BulletList;
 
 typedef struct 
 {
@@ -87,7 +93,7 @@ typedef struct
     float sensibility;
 } Mouse;
 
-typedef Stack(Texture2D) TextureList;
+typedef List(Texture2D) TextureList;
 
 typedef struct 
 {
@@ -110,17 +116,13 @@ InternalSystem* new_system(char* name, int size_x, int size_y)
 
     _sys->name = str_duplicate(name);
 
-    _sys->world.creatures = (CreatureList*)malloc(sizeof(CreatureList));
-    stack_init(*_sys->world.creatures);
+    _sys->world.creatures = list_init(CreatureList);
 
-    _sys->world.bullets = (BulletList*)malloc(sizeof(BulletList));
-    stack_init(*_sys->world.bullets);
+    _sys->world.bullets = list_init(BulletList);
 
-    _sys->equip_textures = (TextureList*)malloc(sizeof(TextureList));
-    stack_init(*_sys->equip_textures);
+    _sys->equip_textures = list_init(TextureList);
 
-    _sys->item_textures = (TextureList*)malloc(sizeof(TextureList));
-    stack_init(*_sys->item_textures);
+    _sys->item_textures = list_init(TextureList);
 
     // camera setup
     _sys->camera.position = (Vector3){ 0.0f, 1.72f, 3.0f };
@@ -140,8 +142,8 @@ InternalSystem* new_system(char* name, int size_x, int size_y)
 void free_system(InternalSystem* _sys)
 {
     free(_sys->name);
-    stack_free(*_sys->world.creatures);
-    stack_free(*_sys->world.bullets);
+    list_free(*_sys->world.creatures);
+    list_free(*_sys->world.bullets);
     free(_sys);
 }
 
@@ -160,6 +162,7 @@ Creature* new_creature(InternalSystem* _sys, char* name, int x, int y, int z)
     creature->current_item = 0;
     creature->color = RED;
     creature->speed = 0.1f;
+    creature->status = 0;
     
     creature->inventory = (ItemList*)malloc(sizeof(ItemList));
 
@@ -167,9 +170,9 @@ Creature* new_creature(InternalSystem* _sys, char* name, int x, int y, int z)
     creature->direction = (Vector3){0,0,0};
     creature->rotation = (Vector3){0,0,0};
 
-    stack_init(*creature->inventory);
+    creature->inventory = list_init(ItemList);
     
-    stack_push(*_sys->world.creatures, *creature);
+    list_push(*_sys->world.creatures, *creature);
     return creature;
 }
 
@@ -179,7 +182,7 @@ Bullet* new_bullet(InternalSystem* _sys, Vector3 position, Vector3 direction, Fl
     bullet->position = position;
     bullet->direction = direction;
     bullet->speed = speed;
-    stack_push(*_sys->world.bullets, *bullet);
+    list_push(*_sys->world.bullets, *bullet);
     return bullet;
 }
 
@@ -192,9 +195,9 @@ void load_texture(InternalSystem* _sys, char* path, bool is_equip)
     UnloadImage(handimg);   // Once image has been converted to texture and uploaded to VRAM, it can be unloaded from RAM
 
     if (is_equip)
-        stack_push(*_sys->equip_textures, texture);
+        list_push(*_sys->equip_textures, texture);
     else
-        stack_push(*_sys->item_textures, texture);
+        list_push(*_sys->item_textures, texture);
 }
 
 Item* new_item(char* name, char type, int capacity, int content_type, int content)
@@ -225,14 +228,14 @@ void reload_item(InternalSystem* sys, Creature* creature)
                         creature->inventory->data[creature->current_item].content += needed;
                         creature->inventory->data[i].content -= needed;
                         if (creature->inventory->data[i].content == 0)
-                            stack_fast_remove(*creature->inventory, i);// remove the empty item
+                            list_fast_remove(*creature->inventory, i);// remove the empty item
                         break;
                     }
                     else
                     {
                         creature->inventory->data[creature->current_item].content += creature->inventory->data[i].content;
                         creature->inventory->data[i].content = 0;
-                        stack_fast_remove(*creature->inventory, i);// remove the empty item
+                        list_fast_remove(*creature->inventory, i);// remove the empty item
                         i--;// we need to check the same index again
                     }
                 }
@@ -268,7 +271,7 @@ void use_item(InternalSystem* sys, Creature* creature)
         bullet.position = (Vector3){creature->position.x, creature->position.y + 1.7f, creature->position.z};
         bullet.direction = (Vector3){creature->direction.x, creature->direction.y, creature->direction.z};
         bullet.speed = BULLET_SPEED;
-        stack_push(*sys->world.bullets, bullet);
+        list_push(*sys->world.bullets, bullet);
         break;
     case ITEM_BULLET_REVOLVER:
         break;
@@ -279,7 +282,7 @@ void use_item(InternalSystem* sys, Creature* creature)
 
 int main(void)
 {
-    InternalSystem* sys = new_system("brutopolis 3", 800, 600);
+    InternalSystem* sys = new_system("brutopolis 2 - the experiment prologue", 800, 450);
 
     system_startup(sys);
 
@@ -305,9 +308,9 @@ int main(void)
     Item* revolver = new_item("revolver", ITEM_REVOLVER, item_capacities[ITEM_REVOLVER], ITEM_BULLET_REVOLVER, 6);
     Item* bullet_revolver = new_item("buller_revolver", ITEM_BULLET_REVOLVER, item_capacities[ITEM_BULLET_REVOLVER], 0, item_capacities[ITEM_BULLET_REVOLVER]);
 
-    stack_push(*player->inventory, *hand);
-    stack_push(*player->inventory, *revolver);
-    stack_push(*player->inventory, *bullet_revolver);
+    list_push(*player->inventory, *hand);
+    list_push(*player->inventory, *revolver);
+    list_push(*player->inventory, *bullet_revolver);
 
     
     for (int i = 0;i < GetRandomValue(2,100);i++)
@@ -392,12 +395,12 @@ int main(void)
                 0.1f))
                 {
                     // swap the current Creature with the last Creature, then pop the last Creature
-                    stack_fast_remove(*sys->world.creatures, j);
+                    list_fast_remove(*sys->world.creatures, j);
                     // we need to check the same index again, so we decrement j
                     j--;
 
                     // same for the bullet
-                    stack_fast_remove(*sys->world.bullets, i);
+                    list_fast_remove(*sys->world.bullets, i);
                     i--;
                 }
             }
@@ -405,7 +408,7 @@ int main(void)
             // Desativar balas muito longe
             if (Vector3Distance(sys->camera.position, sys->world.bullets->data[i].position) > 50) 
             {
-                stack_fast_remove(*sys->world.bullets, i);
+                list_fast_remove(*sys->world.bullets, i);
             }
         }
 
@@ -439,6 +442,7 @@ int main(void)
             DrawTexture(sys->equip_textures->data[player->current_item],
             sys->resolution.x - sys->equip_textures->data[player->current_item].width + 70, sys->resolution.y - sys->equip_textures->data[player->current_item].height+25, WHITE);
 
+            DrawText(TextFormat("%s %d/%d", item_names[player->inventory->data[player->current_item].type], player->inventory->data[player->current_item].content, player->inventory->data[player->current_item].capacity), 10, 10, 20, DARKGRAY);
             //DrawText(TextFormat("Inimigos restantes: %d", enemies->size), 10, 10, 20, DARKGRAY);
 
         EndDrawing();

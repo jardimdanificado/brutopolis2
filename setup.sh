@@ -26,5 +26,5 @@ else
     cd ..
     cp bruter/build/lib/libbruter.a lib/
 fi
-cp bruter/include/bruter.h include/
+cp bruter/include/* include/
 cp data build/ -r
