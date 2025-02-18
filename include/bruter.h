@@ -65,13 +65,6 @@ typedef List(char*) StringList;
 typedef List(Int) IntList;
 typedef List(char) CharList;
 
-
-typedef struct
-{
-    StringList *varnames;
-    char *code;
-} InternalFunction;
-
 typedef struct
 {
     ValueList *stack;
@@ -161,7 +154,6 @@ IntList* parse(void* _vm, char* cmd, HashList* context);
 
 // stringify funcstion
 char* list_stringify(VirtualMachine* vm, IntList *list);
-char* function_stringify(VirtualMachine* vm, InternalFunction *func);
 
 // <libraries header>
 

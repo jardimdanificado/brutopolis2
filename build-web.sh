@@ -17,4 +17,4 @@ if [ -n "$SETUP" ]; then
 	rm -rf bruter
 fi
 
-emcc -o build/index.html src/main.c -Llib -Iinclude ./lib/web/libraylib.a -s USE_GLFW=3 -s ASYNCIFY --shell-file src/minshell.html
+emcc -o build/index.html src/main.c -Llib/web -Iinclude -lbruter -lraylib -s USE_GLFW=3 -s ASYNCIFY --shell-file src/minshell.html --preload-file data

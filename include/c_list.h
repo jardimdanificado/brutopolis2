@@ -1,3 +1,5 @@
+// bruter 0.7.5b
+
 // type agnostic,
 // header only,
 // easy to use,

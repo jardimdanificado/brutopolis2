@@ -11,12 +11,20 @@ if [ -n "$WEB" ]; then
     rm lib/bruter.js lib/bruter.wasm
     cp bruter/build/web/bruter.js lib/
     cp bruter/build/web/bruter.wasm lib/
+    cd bruter
+    ./build.sh --cc emcc # we need to build the library for the web version
+    cd ..
+    cp bruter/build/lib/libbruter.a lib/web/
 elif [ -n "$BOTH" ]; then
     EMCC=emcc ./build.sh
     cd ..
     rm lib/bruter.js lib/bruter.wasm
     cp bruter/build/web/bruter.js lib/
     cp bruter/build/web/bruter.wasm lib/
+    cd bruter
+    ./build.sh --cc emcc # we need to build the library for the web version
+    cd ..
+    cp bruter/build/lib/libbruter.a lib/web/
     cd bruter
     ./build.sh
     cd ..
