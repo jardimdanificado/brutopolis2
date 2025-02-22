@@ -94,6 +94,7 @@ typedef struct
 } Mouse;
 
 typedef List(Texture2D) TextureList;
+typedef List(Model) ModelList;
 
 typedef struct 
 {
@@ -105,6 +106,7 @@ typedef struct
     Mouse mouse;
     TextureList *equip_textures;
     TextureList *item_textures;
+    ModelList *models;
 } InternalSystem;
 
 InternalSystem* new_system(char* name, int size_x, int size_y)
@@ -123,6 +125,8 @@ InternalSystem* new_system(char* name, int size_x, int size_y)
     _sys->equip_textures = list_init(TextureList);
 
     _sys->item_textures = list_init(TextureList);
+
+    _sys->models = list_init(ModelList);
 
     // camera setup
     _sys->camera.position = (Vector3){ 0.0f, 1.72f, 3.0f };
@@ -198,6 +202,12 @@ void load_texture(InternalSystem* _sys, char* path, bool is_equip)
         list_push(*_sys->equip_textures, texture);
     else
         list_push(*_sys->item_textures, texture);
+}
+
+void load_model(InternalSystem* _sys, char* path)
+{
+    Model model = LoadModel(path);
+    list_push(*_sys->models, model);
 }
 
 Item* new_item(char* name, char type, int capacity, int content_type, int content)
@@ -282,7 +292,7 @@ void use_item(InternalSystem* sys, Creature* creature)
 
 int main(void)
 {
-    InternalSystem* sys = new_system("brutopolis 2 - the experiment prologue", 800, 450);
+    InternalSystem* sys = new_system("brutopolis 2 - o auto do céu", 800, 450);
 
     system_startup(sys);
 
@@ -292,8 +302,10 @@ int main(void)
     load_texture(sys, "data/img/equip_revolver.png", true);
     load_texture(sys, "data/img/item_bullet_revolver.png", false);
     load_texture(sys, "data/img/equip_bullet_revolver.png", true);
+    load_model(sys, "data/model/base.obj");
+    load_model(sys, "data/model/0.obj");
 
-    Texture2D creaturetexture = LoadTexture("data/img/creature.png");
+    /*Texture2D creaturetexture = LoadTexture("data/img/creature.png");
 
     Rectangle source = { 0.0f, 0.0f, (float)creaturetexture.width, (float)creaturetexture.height };
 
@@ -301,9 +313,9 @@ int main(void)
     Vector3 billUp = { 0.0f, 1.0f, 0.0f };
 
     // Set the height of the rotating billboard to 1.0 with the aspect ratio fixed
-    Vector2 size = { source.width/source.height, 1.0f };
+    Vector2 size = { source.width/source.height, 1.0f };*/
 
-    Creature* player = new_creature(sys, "joao451", 0, 0, 0);
+    Creature* player = new_creature(sys, "joao451", 2, 0, -2);
     Item* hand = new_item("hand", ITEM_HAND, 0, 0, 0);
     Item* revolver = new_item("revolver", ITEM_REVOLVER, item_capacities[ITEM_REVOLVER], ITEM_BULLET_REVOLVER, 6);
     Item* bullet_revolver = new_item("buller_revolver", ITEM_BULLET_REVOLVER, item_capacities[ITEM_BULLET_REVOLVER], 0, item_capacities[ITEM_BULLET_REVOLVER]);
@@ -317,6 +329,9 @@ int main(void)
     {
         char* _name = TextFormat("joao%d", i);
         new_creature(sys, _name, GetRandomValue(-20,20), 0, GetRandomValue(-20,20));
+        // lets set a random rotation
+        sys->world.creatures->data[sys->world.creatures->size-1].rotation = (Vector3){0,GetRandomValue(-180,180),0};
+
     }
 
     sys->player_index = 0;
@@ -413,18 +428,20 @@ int main(void)
         }
 
         BeginDrawing();
-            ClearBackground(RAYWHITE);
+            ClearBackground(BLACK);
 
             BeginMode3D(sys->camera);
                 // Chão
-                DrawPlane((Vector3){0.0f, 0.0f, 0.0f}, (Vector2){50.0f, 50.0f}, LIGHTGRAY);
-
+                //DrawPlane((Vector3){0.0f, 0.0f, 0.0f}, (Vector2){50.0f, 50.0f}, LIGHTGRAY);
+                DrawModel(sys->models->data[1], (Vector3){0,0,0}, 1.0f, WHITE);
                 // Inimigos
                 for (int i = 0; i < sys->world.creatures->size; i++) 
                 {
                     // size 1x1.7x1
-                    if (i != sys->player_index)
+                    /*if (i != sys->player_index)
                         DrawBillboardPro(sys->camera, creaturetexture, source, (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y + 0.85f, sys->world.creatures->data[i].position.z}, billUp, (Vector2){1.0f, 1.7f}, (Vector2){0.5f, 0.5f}, 0, WHITE);
+                    */
+                    DrawModelEx(sys->models->data[0], (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y, sys->world.creatures->data[i].position.z}, (Vector3){0,1,0}, sys->world.creatures->data[i].rotation.y, (Vector3){1,1,1}, RED);
                 }
 
                 // Balas
