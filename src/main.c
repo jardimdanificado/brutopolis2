@@ -68,7 +68,6 @@ typedef struct
     ItemList *inventory; 
     Int current_item;
     Int status;
-    Int aceleration;
 } Creature;
 typedef List(Creature) CreatureList;
 
@@ -197,8 +196,6 @@ Int new_creature(InternalSystem* _sys, char* name, int x, int y, int z)
     creature->name = str_duplicate(name);
     creature->direction = (Vector3){0,0,0};
     creature->rotation = (Vector3){0,0,0};
-
-    creature->aceleration = 1;
 
     creature->inventory = list_init(ItemList);
     
@@ -439,9 +436,10 @@ int main(void)
         if(check_move_collision(sys, creature(player_id).position, rotatedMove, 0.1) == 0)
             creature(player_id).position = Vector3Add(creature(player_id).position, Vector3Scale(rotatedMove, creature(player_id).speed));
 
+        // add 1.72 to the position to get the eye level
         sys->camera.position = Vector3Add(
             creature(player_id).position,
-            (Vector3){0.0f, 1.72f, 0.0f}
+            (Vector3){0.0f, 1.72f, 0.0f} // 
         );
 
         // Atirar
@@ -524,12 +522,12 @@ int main(void)
                 for (int i = 0; i < sys->world.creatures->size; i++) 
                 {
                     // size 1x1.7x1
-                    if (i != sys->player_index)
-                        DrawModelEx(sys->models->data[0], (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y, sys->world.creatures->data[i].position.z}, (Vector3){0,1,0}, sys->world.creatures->data[i].rotation.y, (Vector3){1,1,1}, RED);
+                    if (i != sys->player_index)// we reduce -0.2 in the y axis to compensate hitbox
+                        DrawModelEx(sys->models->data[0], (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y-0.2, sys->world.creatures->data[i].position.z}, (Vector3){0,1,0}, sys->world.creatures->data[i].rotation.y, (Vector3){1,1,1}, RED);
                         //DrawBillboardPro(sys->camera, creaturetexture, source, (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y + 0.85f, sys->world.creatures->data[i].position.z}, billUp, (Vector2){1.0f, 1.7f}, (Vector2){0.5f, 0.5f}, 0, WHITE);
                 }
 
-                // Balas
+                // bullets
                 for (int i = 0; i < sys->world.bullets->size; i++) 
                 {
                     DrawSphere(sys->world.bullets->data[i].position, 0.01f, BLACK);
@@ -537,7 +535,7 @@ int main(void)
 
             EndMode3D();
 
-            // Mira
+            // crosshair
             DrawLine(sys->resolution.x/2 - 10, sys->resolution.y/2, sys->resolution.x/2 + 10, sys->resolution.y/2, GREEN);
             DrawLine(sys->resolution.x/2, sys->resolution.y/2 - 10, sys->resolution.x/2, sys->resolution.y/2 + 10, GREEN);
 
