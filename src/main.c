@@ -68,6 +68,7 @@ typedef struct
     ItemList *inventory; 
     Int current_item;
     Int status;
+    Int aceleration;
 } Creature;
 typedef List(Creature) CreatureList;
 
@@ -93,8 +94,22 @@ typedef struct
     float sensibility;
 } Mouse;
 
+typedef List(BoundingBox) BoundingBoxList;
+
+
+
 typedef List(Texture2D) TextureList;
 typedef List(Model) ModelList;
+
+typedef struct
+{
+    Int model_id;
+    BoundingBoxList *hitboxes;
+    char* name;
+} Map;
+
+typedef List(Map) MapList;
+
 
 typedef struct 
 {
@@ -107,7 +122,12 @@ typedef struct
     TextureList *equip_textures;
     TextureList *item_textures;
     ModelList *models;
+    MapList *maps;
+    Int current_map;
 } InternalSystem;
+
+// macro to acess &sys->world.creatures->data[name];
+#define creature(name) sys->world.creatures->data[name]
 
 InternalSystem* new_system(char* name, int size_x, int size_y)
 {
@@ -127,6 +147,10 @@ InternalSystem* new_system(char* name, int size_x, int size_y)
     _sys->item_textures = list_init(TextureList);
 
     _sys->models = list_init(ModelList);
+
+    _sys->maps = list_init(MapList);
+
+    _sys->current_map = 0;
 
     // camera setup
     _sys->camera.position = (Vector3){ 0.0f, 1.72f, 3.0f };
@@ -158,7 +182,7 @@ void system_startup(InternalSystem* _sys)
     DisableCursor();
 }
 
-Creature* new_creature(InternalSystem* _sys, char* name, int x, int y, int z)
+Int new_creature(InternalSystem* _sys, char* name, int x, int y, int z)
 {
     Creature* creature = (Creature*)malloc(sizeof(Creature));
     creature->position = (Vector3){ x, y, z };
@@ -174,10 +198,13 @@ Creature* new_creature(InternalSystem* _sys, char* name, int x, int y, int z)
     creature->direction = (Vector3){0,0,0};
     creature->rotation = (Vector3){0,0,0};
 
+    creature->aceleration = 1;
+
     creature->inventory = list_init(ItemList);
     
     list_push(*_sys->world.creatures, *creature);
-    return creature;
+    Int id = _sys->world.creatures->size - 1;
+    return id;
 }
 
 Bullet* new_bullet(InternalSystem* _sys, Vector3 position, Vector3 direction, Float speed)
@@ -204,10 +231,11 @@ void load_texture(InternalSystem* _sys, char* path, bool is_equip)
         list_push(*_sys->item_textures, texture);
 }
 
-void load_model(InternalSystem* _sys, char* path)
+Int load_model(InternalSystem* _sys, char* path)
 {
     Model model = LoadModel(path);
     list_push(*_sys->models, model);
+    return _sys->models->size - 1;
 }
 
 Item* new_item(char* name, char type, int capacity, int content_type, int content)
@@ -290,6 +318,35 @@ void use_item(InternalSystem* sys, Creature* creature)
     }
 }
 
+void new_map(InternalSystem* sys, char* name, int model_id)
+{
+    Map map = {0};
+    map.name = str_duplicate(name);
+    map.model_id = model_id;
+    map.hitboxes = list_init(BoundingBoxList);
+    // mesh 0 is the map, all other meshes are hitboxes
+    for (int i = 1; i < sys->models->data[model_id].meshCount; i++)
+    {
+        BoundingBox box = GetMeshBoundingBox(sys->models->data[model_id].meshes[i]);
+        list_push(*map.hitboxes, box);
+    }
+    list_push(*sys->maps, map);
+}
+
+bool check_move_collision(InternalSystem* sys, Vector3 position, Vector3 move, float size)
+{
+    bool collision = false;
+    for (int i = 0; i < sys->maps->data[sys->current_map].hitboxes->size; i++)
+    {
+        if (CheckCollisionBoxSphere(sys->maps->data[sys->current_map].hitboxes->data[i], Vector3Add(position, move), size) == 1)
+        {
+            collision = true;
+            break;
+        }
+    }
+    return collision;
+}
+
 int main(void)
 {
     InternalSystem* sys = new_system("brutopolis 2 - o auto do céu", 800, 450);
@@ -303,7 +360,8 @@ int main(void)
     load_texture(sys, "data/img/item_bullet_revolver.png", false);
     load_texture(sys, "data/img/equip_bullet_revolver.png", true);
     load_model(sys, "data/model/base.obj");
-    load_model(sys, "data/model/0.obj");
+
+    new_map(sys, "test map", load_model(sys, "data/model/map0/map.obj"));
 
     /*Texture2D creaturetexture = LoadTexture("data/img/creature.png");
 
@@ -315,47 +373,46 @@ int main(void)
     // Set the height of the rotating billboard to 1.0 with the aspect ratio fixed
     Vector2 size = { source.width/source.height, 1.0f };*/
 
-    Creature* player = new_creature(sys, "joao451", 2, 0, -2);
+    Int player_id = new_creature(sys, "joao451", 4*2-2, 10, 4*12-2);
     Item* hand = new_item("hand", ITEM_HAND, 0, 0, 0);
     Item* revolver = new_item("revolver", ITEM_REVOLVER, item_capacities[ITEM_REVOLVER], ITEM_BULLET_REVOLVER, 6);
     Item* bullet_revolver = new_item("buller_revolver", ITEM_BULLET_REVOLVER, item_capacities[ITEM_BULLET_REVOLVER], 0, item_capacities[ITEM_BULLET_REVOLVER]);
+    sys->player_index = 0;
 
-    list_push(*player->inventory, *hand);
-    list_push(*player->inventory, *revolver);
-    list_push(*player->inventory, *bullet_revolver);
-
+    list_push(*creature(player_id).inventory, *hand);
+    list_push(*creature(player_id).inventory, *revolver);
+    list_push(*creature(player_id).inventory, *bullet_revolver);
     
     for (int i = 0;i < GetRandomValue(2,100);i++)
     {
         char* _name = TextFormat("joao%d", i);
-        new_creature(sys, _name, GetRandomValue(-20,20), 0, GetRandomValue(-20,20));
+        new_creature(sys, _name, GetRandomValue(-20,20), 15, GetRandomValue(-20,20));
         // lets set a random rotation
         sys->world.creatures->data[sys->world.creatures->size-1].rotation = (Vector3){0,GetRandomValue(-180,180),0};
 
     }
 
-    sys->player_index = 0;
 
     while (!WindowShouldClose())
     {
         // Atualização da câmera
         // Rotação com mouse
         sys->mouse.delta = GetMouseDelta();
-        player->rotation.x += sys->mouse.delta.x * sys->mouse.sensibility;
-        player->rotation.y -= sys->mouse.delta.y * sys->mouse.sensibility;
+        creature(player_id).rotation.x += sys->mouse.delta.x * sys->mouse.sensibility;
+        creature(player_id).rotation.y -= sys->mouse.delta.y * sys->mouse.sensibility;
 
         // Limitar rotação vertical
-        player->rotation.y = Clamp(player->rotation.y, -PI/2.5f, PI/2.5f);
+        creature(player_id).rotation.y = Clamp(creature(player_id).rotation.y, -PI/2.5f, PI/2.5f);
 
         // Calcular direção da câmera
-        player->direction = (Vector3)
+        creature(player_id).direction = (Vector3)
         {
-            cosf(player->rotation.x) * cosf(player->rotation.y),
-            sinf(player->rotation.y),
-            sinf(player->rotation.x) * cosf(player->rotation.y)
+            cosf(creature(player_id).rotation.x) * cosf(creature(player_id).rotation.y),
+            sinf(creature(player_id).rotation.y),
+            sinf(creature(player_id).rotation.x) * cosf(creature(player_id).rotation.y)
         };
-        player->direction = Vector3Normalize(player->direction);
-        sys->camera.target = Vector3Add(sys->camera.position, player->direction);
+        creature(player_id).direction = Vector3Normalize(creature(player_id).direction);
+        sys->camera.target = Vector3Add(sys->camera.position, creature(player_id).direction);
 
         // Movimento do jogador
         Vector3 move = {0};
@@ -367,32 +424,34 @@ int main(void)
         int mouse_wheel = GetMouseWheelMove();
         if (mouse_wheel != 0)
         {
-            player->current_item += mouse_wheel;
-            player->current_item = Clamp(player->current_item, 0, player->inventory->size - 1);
+            creature(player_id).current_item += mouse_wheel;
+            creature(player_id).current_item = Clamp(creature(player_id).current_item, 0, creature(player_id).inventory->size - 1);
         }
 
         // Rotacionar movimento de acordo com a direção da câmera
         Vector3 rotatedMove = 
         {
-            move.x * cosf(player->rotation.x) - move.z * sinf(player->rotation.x),
+            move.x * cosf(creature(player_id).rotation.x) - move.z * sinf(creature(player_id).rotation.x),
             0.0f,
-            move.x * sinf(player->rotation.x) + move.z * cosf(player->rotation.x)
+            move.x * sinf(creature(player_id).rotation.x) + move.z * cosf(creature(player_id).rotation.x)
         };
-        player->position = Vector3Add(player->position, Vector3Scale(rotatedMove, player->speed));
+
+        if(check_move_collision(sys, creature(player_id).position, rotatedMove, 0.1) == 0)
+            creature(player_id).position = Vector3Add(creature(player_id).position, Vector3Scale(rotatedMove, creature(player_id).speed));
 
         sys->camera.position = Vector3Add(
-            player->position,
-            (Vector3){0.0f, 1.72f, 0.0f} // Offset de altura dos olhos
+            creature(player_id).position,
+            (Vector3){0.0f, 1.72f, 0.0f}
         );
 
         // Atirar
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) 
         {
-            use_item(sys,player);
+            use_item(sys, &creature(player_id));
         }
         else if (IsKeyDown(KEY_R))
         {
-            reload_item(sys,player);
+            reload_item(sys, &creature(player_id));
         }
 
         // Atualizar balas
@@ -427,21 +486,47 @@ int main(void)
             }
         }
 
+        // gravity
+        for (int i = 0; i < sys->world.creatures->size; i++)
+        {
+            bool collision = false;
+            int j = 0;
+            // check hitboxes
+            for (j = 0; j < sys->maps->data[sys->current_map].hitboxes->size; j++)
+            {
+                if (check_move_collision(sys, creature(i).position, (Vector3){0,-0.1,0}, 0.1))
+                {
+
+                    collision = true;
+                    break;
+                }
+            }
+
+            if (!collision)
+            {
+                creature(i).position.y -= 0.1f;
+            }
+            else 
+            {
+                creature(i).position.y = sys->maps->data[sys->current_map].hitboxes->data[j].max.y + 0.2;
+            }
+        }
+
         BeginDrawing();
             ClearBackground(BLACK);
 
             BeginMode3D(sys->camera);
-                // Chão
-                //DrawPlane((Vector3){0.0f, 0.0f, 0.0f}, (Vector2){50.0f, 50.0f}, LIGHTGRAY);
-                DrawModel(sys->models->data[1], (Vector3){0,0,0}, 1.0f, WHITE);
-                // Inimigos
+                //DrawModel(sys->models->data[1], (Vector3){0,0,0}, 1.0f, WHITE);
+
+                // draw map (mesh, material, Matrix)
+                DrawMesh(sys->models->data[sys->maps->data[sys->current_map].model_id].meshes[0], sys->models->data[sys->maps->data[sys->current_map].model_id].materials[0], MatrixIdentity());
+
                 for (int i = 0; i < sys->world.creatures->size; i++) 
                 {
                     // size 1x1.7x1
-                    /*if (i != sys->player_index)
-                        DrawBillboardPro(sys->camera, creaturetexture, source, (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y + 0.85f, sys->world.creatures->data[i].position.z}, billUp, (Vector2){1.0f, 1.7f}, (Vector2){0.5f, 0.5f}, 0, WHITE);
-                    */
-                    DrawModelEx(sys->models->data[0], (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y, sys->world.creatures->data[i].position.z}, (Vector3){0,1,0}, sys->world.creatures->data[i].rotation.y, (Vector3){1,1,1}, RED);
+                    if (i != sys->player_index)
+                        DrawModelEx(sys->models->data[0], (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y, sys->world.creatures->data[i].position.z}, (Vector3){0,1,0}, sys->world.creatures->data[i].rotation.y, (Vector3){1,1,1}, RED);
+                        //DrawBillboardPro(sys->camera, creaturetexture, source, (Vector3){sys->world.creatures->data[i].position.x, sys->world.creatures->data[i].position.y + 0.85f, sys->world.creatures->data[i].position.z}, billUp, (Vector2){1.0f, 1.7f}, (Vector2){0.5f, 0.5f}, 0, WHITE);
                 }
 
                 // Balas
@@ -456,11 +541,12 @@ int main(void)
             DrawLine(sys->resolution.x/2 - 10, sys->resolution.y/2, sys->resolution.x/2 + 10, sys->resolution.y/2, GREEN);
             DrawLine(sys->resolution.x/2, sys->resolution.y/2 - 10, sys->resolution.x/2, sys->resolution.y/2 + 10, GREEN);
 
-            DrawTexture(sys->equip_textures->data[player->current_item],
-            sys->resolution.x - sys->equip_textures->data[player->current_item].width + 70, sys->resolution.y - sys->equip_textures->data[player->current_item].height+25, WHITE);
+            DrawTexture(sys->equip_textures->data[creature(player_id).current_item],
+            sys->resolution.x - sys->equip_textures->data[creature(player_id).current_item].width + 70, sys->resolution.y - sys->equip_textures->data[creature(player_id).current_item].height+25, WHITE);
 
-            DrawText(TextFormat("%s %d/%d", item_names[player->inventory->data[player->current_item].type], player->inventory->data[player->current_item].content, player->inventory->data[player->current_item].capacity), 10, 10, 20, DARKGRAY);
+            DrawText(TextFormat("%s %d/%d", item_names[creature(player_id).inventory->data[creature(player_id).current_item].type], creature(player_id).inventory->data[creature(player_id).current_item].content, creature(player_id).inventory->data[creature(player_id).current_item].capacity), 10, 10, 20, DARKGRAY);
             //DrawText(TextFormat("Inimigos restantes: %d", enemies->size), 10, 10, 20, DARKGRAY);
+            DrawText(TextFormat("Player position: %f %f %f", creature(player_id).position.x, creature(player_id).position.y, creature(player_id).position.z), 10, 30, 20, DARKGRAY);
 
         EndDrawing();
     }
