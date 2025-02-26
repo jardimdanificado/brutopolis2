@@ -16,7 +16,7 @@ enum
 const char* item_names[] = 
 {
     "hand",
-    "38tão enferrujado",
+    "revolver",
     "revolver bullets"
 };
 
