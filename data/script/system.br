@@ -1,0 +1,44 @@
+# (system = (:));
+
+// char* name
+Int player_index
+Vector2 resolution
+World world
+Camera camera
+Mouse mouse
+TextureList *equip_textures
+TextureList *item_textures
+ModelList *models
+MapList *maps
+Int current_map;
+
+push: system (:
+    "name"
+    "resolution"
+    "player_index"
+    "world"
+    "camera"
+    "mouse"
+    "equip_textures"
+    "item_textures"
+    "models"
+    "maps"
+    "current_map"
+);
+
+push: system (: "brutopolis 2 - o auto do ceu" 0 0 0 0 0 0 0 0 0 0);
+
+//set: system@name ("brutopolis 2 - o auto do ceu");
+set: system@resolution (: 800 600);
+set: system@player_index -1;
+set: system@world (: (: "creatures" "bullets" "items") (: (:) (:) (:)));
+set: system@camera (mem.copy @0);
+set: system@mouse (: (: "delta" "position" "sensibility") (: (: 0 0) (: 0 0) 0.003));
+set: system@equip_textures (:);
+set: system@item_textures (:);
+set: system@models (:);
+set: system@maps (:);
+set: system@current_map -1;
+
+ls;
+return 0;
