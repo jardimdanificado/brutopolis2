@@ -166,19 +166,32 @@ InternalSystem* new_system(char* name, int size_x, int size_y)
     return _sys;
 }
 
+void system_startup(InternalSystem* _sys)
+{
+    InitWindow(_sys->resolution.x, _sys->resolution.y, _sys->name);
+    SetTargetFPS(60);
+    DisableCursor();
+}
+
+function(brl_new_system)
+{
+    char* name = arg(0).string;
+    int size_x = (int)arg(1).number;
+    int size_y = (int)arg(2).number;
+    InternalSystem* _sys = new_system(name, size_x, size_y);
+    Int sys_index = new_var(vm);
+    data(sys_index).pointer = _sys;
+    
+    system_startup(_sys);
+    return sys_index;
+}
+
 void free_system(InternalSystem* _sys)
 {
     free(_sys->name);
     list_free(*_sys->world.creatures);
     list_free(*_sys->world.bullets);
     free(_sys);
-}
-
-void system_startup(InternalSystem* _sys)
-{
-    InitWindow(_sys->resolution.x, _sys->resolution.y, _sys->name);
-    SetTargetFPS(60);
-    DisableCursor();
 }
 
 Int new_creature(InternalSystem* _sys, char* name, int x, int y, int z)
@@ -202,6 +215,17 @@ Int new_creature(InternalSystem* _sys, char* name, int x, int y, int z)
     list_push(*_sys->world.creatures, *creature);
     Int id = _sys->world.creatures->size - 1;
     return id;
+}
+
+function(brl_new_creature)
+{
+    InternalSystem* _sys = (InternalSystem*)arg(0).pointer;
+    char* name = arg(1).string;
+    int x = (int)arg(2).number;
+    int y = (int)arg(3).number;
+    int z = (int)arg(4).number;
+    Int creature_id = new_number(vm, new_creature(_sys, name, x, y, z));
+    return creature_id;
 }
 
 Bullet* new_bullet(InternalSystem* _sys, Vector3 position, Vector3 direction, Float speed)
@@ -228,11 +252,27 @@ void load_texture(InternalSystem* _sys, char* path, bool is_equip)
         list_push(*_sys->item_textures, texture);
 }
 
+function(brl_load_texture)
+{
+    InternalSystem* _sys = (InternalSystem*)arg(0).pointer;
+    char* path = arg(1).string;
+    load_texture(_sys, path, arg_i(2) != 0);
+    return -1;
+}
+
 Int load_model(InternalSystem* _sys, char* path)
 {
     Model model = LoadModel(path);
     list_push(*_sys->models, model);
     return _sys->models->size - 1;
+}
+
+function(brl_load_model)
+{
+    InternalSystem* _sys = (InternalSystem*)arg(0).pointer;
+    char* path = arg(1).string;
+    load_model(_sys, path);
+    return -1;
 }
 
 Item* new_item(char* name, char type, int capacity, int content_type, int content)
@@ -243,6 +283,19 @@ Item* new_item(char* name, char type, int capacity, int content_type, int conten
     item->content_type = content_type;
     item->content = content;
     return item;
+}
+
+function(brl_new_item)
+{
+    char* name = arg(0).string;
+    char type = arg(1).number;
+    int capacity = (int)arg(2).number;
+    int content_type = (int)arg(3).number;
+    int content = (int)arg(4).number;
+    Item* item = new_item(name, type, capacity, content_type, content);
+    Int item_index = new_var(vm);
+    data(item_index).pointer = item;
+    return item_index;
 }
 
 void reload_item(InternalSystem* sys, Creature* creature)
@@ -330,6 +383,16 @@ void new_map(InternalSystem* sys, char* name, int model_id)
     list_push(*sys->maps, map);
 }
 
+function(brl_new_map)
+{
+    InternalSystem* sys = (InternalSystem*)arg(0).pointer;
+    char* name = arg(1).string;
+    char* model_path = arg(2).string;
+    Int model_id = load_model(sys, model_path);
+    new_map(sys, name, model_id);
+    return -1;
+}
+
 bool check_move_collision(InternalSystem* sys, Vector3 position, Vector3 move, float size)
 {
     bool collision = false;
@@ -344,21 +407,27 @@ bool check_move_collision(InternalSystem* sys, Vector3 position, Vector3 move, f
     return collision;
 }
 
+init(brutopolis)
+{
+    register_builtin(vm, "new.system", brl_new_system);
+    register_builtin(vm, "load.texture", brl_load_texture);
+    register_builtin(vm, "load.model", brl_load_model);
+    register_builtin(vm, "new.map", brl_new_map);
+    register_builtin(vm, "new.creature", brl_new_creature);
+    register_builtin(vm, "new.item", brl_new_item);
+}
+
 int main(void)
 {
-    InternalSystem* sys = new_system("brutopolis 2 - o auto do céu", 800, 450);
+    VirtualMachine* vm = make_vm();
+    init_std(vm);
+    init_brutopolis(vm);
 
-    system_startup(sys);
+    char* datascript = readfile("data/data.br");
+    eval(vm, datascript, NULL);
+    free(datascript);
 
-    load_texture(sys, "data/img/item_hand.png", false);
-    load_texture(sys, "data/img/equip_hand.png", true);
-    load_texture(sys, "data/img/item_revolver.png", false);
-    load_texture(sys, "data/img/equip_revolver.png", true);
-    load_texture(sys, "data/img/item_bullet_revolver.png", false);
-    load_texture(sys, "data/img/equip_bullet_revolver.png", true);
-    load_model(sys, "data/model/base.obj");
-
-    new_map(sys, "test map", load_model(sys, "data/model/map0/map.obj"));
+    InternalSystem* sys = (InternalSystem*)data(hash_find(vm, "game.system")).pointer;
 
     /*Texture2D creaturetexture = LoadTexture("data/img/creature.png");
 
@@ -370,7 +439,7 @@ int main(void)
     // Set the height of the rotating billboard to 1.0 with the aspect ratio fixed
     Vector2 size = { source.width/source.height, 1.0f };*/
 
-    Int player_id = new_creature(sys, "joao451", 4*2-2, 10, 4*12-2);
+    Int player_id = data(hash_find(vm, "player")).number;
     Item* hand = new_item("hand", ITEM_HAND, 0, 0, 0);
     Item* revolver = new_item("revolver", ITEM_REVOLVER, item_capacities[ITEM_REVOLVER], ITEM_BULLET_REVOLVER, 6);
     Item* bullet_revolver = new_item("buller_revolver", ITEM_BULLET_REVOLVER, item_capacities[ITEM_BULLET_REVOLVER], 0, item_capacities[ITEM_BULLET_REVOLVER]);

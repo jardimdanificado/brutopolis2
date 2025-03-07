@@ -1,0 +1,22 @@
+#new "game.title" "brutopolis 2 - o auto do ceu";
+#new "game.width" 800;
+#new "game.height" 600;
+#new "game.system" (new.system game.title game.width game.height);
+
+load.texture game.system "data/img/item_hand.png" @0;
+load.texture game.system "data/img/equip_hand.png" @1;
+
+load.texture game.system "data/img/item_revolver.png" @0;
+load.texture game.system "data/img/equip_revolver.png" @1;
+
+load.texture game.system "data/img/item_bullet_revolver.png" @0;
+load.texture game.system "data/img/equip_bullet_revolver.png" @1;
+
+load.model game.system "data/model/base.obj";
+
+new.map game.system "test_map" "data/model/map0/map.obj";
+
+#new "player" (new.creature game.system "joao451" 6 10 46);
+
+
+return 0;
